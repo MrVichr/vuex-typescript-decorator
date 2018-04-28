@@ -1,0 +1,459 @@
+import * as Vuex from "vuex";
+
+const $vuexts=Symbol("$vuexts");
+
+class PropertyInfo
+ {
+  propertyKey: string;
+  descriptor: PropertyDescriptor;
+  public constructor(propertyKey: string, descriptor: PropertyDescriptor)
+   {
+    this.propertyKey=propertyKey;
+    this.descriptor=descriptor;
+   }
+ }
+
+class GetterInfo extends PropertyInfo { }
+
+class ActionInfo extends PropertyInfo { }
+
+class MutationInfo extends PropertyInfo
+ {
+  blesk: number;
+ }
+
+ class HiddenInfo
+ {
+  propertyKey: string;
+  descriptor?: PropertyDescriptor;
+  public constructor(propertyKey: string, descriptor?: PropertyDescriptor)
+   {
+    this.propertyKey=propertyKey;
+    this.descriptor=descriptor;
+   }
+ }
+
+
+class ModuleInfo
+ {
+  target: any;
+  getters: GetterInfo[]=[];
+  actions: ActionInfo[]=[];
+  mutations: MutationInfo[]=[];
+  hiddens: HiddenInfo[]=[];
+  public constructor(target: any)
+   {
+    this.target=target;
+   }
+ }
+
+var centralStore: ModuleInfo[]=[];
+function findModule(target: any): ModuleInfo
+ {
+  let res=centralStore.find(function(mi: ModuleInfo) {return mi.target==target;});
+  if (res)
+    return res;
+  let res2=new ModuleInfo(target);
+  centralStore.push(res2);
+  return res2;
+ }
+
+function findModuleC(ctr: Function): ModuleInfo|undefined
+ {
+  return centralStore.find(function(mi: ModuleInfo) {return mi.target.constructor==ctr;});
+ }
+
+function getter_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+ {
+  if (!descriptor)
+    throw Error("The Property Descriptor will be undefined if your script target is less than ES5");;
+  //console.log('got getterm, target=', target, 'prop=', propertyKey, 'descriptor=', descriptor);
+  let mi=findModule(target);
+  //if you use both @getter and get then we're called twice
+  if (!mi.getters.find(function(gi) {return gi.propertyKey==propertyKey;}))
+    mi.getters.push(new GetterInfo(propertyKey, descriptor));
+  //for get property()...
+  if (descriptor.get || descriptor.set)
+    return {...descriptor,
+      get: function(this: VuextsMixin<any>) //called by user, thinking he calls his own method
+         {
+          let vi=this[$vuexts]; //((this as any).$vuexts as VuextsInfo<any>);
+          let key=vi.namespace.join("/")+"/"+propertyKey;
+          //console.log('getter_innerm/g: this=', this, "vi=", vi, "key=", key);
+          if (vi.store_.getters)
+            return vi.store_.getters[key];
+          return undefined;
+         }}
+  else //for @getter
+    return {...descriptor,
+      value: function(this: VuextsMixin<any>) //called by user, thinking s/he calls his own method
+         {
+          let vi=this[$vuexts];
+          let key=vi.namespace.join("/")+"/"+propertyKey;
+          //console.log('getter_innerm/v: this=', this, "vi=", vi, "key=", key);
+          if (vi.store_.getters) // //I know they aren't empty or you'd be unable to get here
+            return vi.store_.getters[key];
+          return undefined;
+         }}
+ }
+
+//decorate as @getter
+function getter(target: any, propertyKey: string, descriptor: PropertyDescriptor)
+ {
+  return getter_inner(target, propertyKey, descriptor);
+ }
+
+//decorate as @getter()
+/*function getter()
+ {
+  return getter_inner;
+ }*/
+
+export { getter }; //cannot have both @getter and @getter() under same name... probably
+
+function action_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+ {
+  if (!descriptor)
+    throw Error("The Property Descriptor will be undefined if your script target is less than ES5");;
+  //console.log('got actionm, target=', target, 'prop=', propertyKey);
+  let mi=findModule(target);
+  mi.actions.push(new ActionInfo(propertyKey, descriptor));
+  return {...descriptor,
+    value: function(this: VuextsMixin<any>, /*context: null,*/ payload: any) //called by user, thinking s/he calls his own method
+       {
+        //console.log('action_innerm: this=', this);
+        let vi=this[$vuexts];
+        vi.store_.dispatch(vi.namespace.join("/")+"/"+propertyKey, payload);
+       }}
+ }
+
+//decorate as @action
+function action(target: any, propertyKey: string, descriptor: PropertyDescriptor)
+ {
+  return action_inner(target, propertyKey, descriptor);
+ }
+
+//decorate as @action()
+/*function action()
+ {
+  return action_inner;
+ }*/
+
+export { action }; //cannot have both @action and @action() under same name... probably
+
+function mutation_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+ {
+  if (!descriptor)
+    throw Error("The Property Descriptor will be undefined if your script target is less than ES5");;
+  //console.log('got mutationm, target=', target, 'prop=', propertyKey);
+  let mi=findModule(target);
+  mi.mutations.push(new MutationInfo(propertyKey, descriptor));
+  return {...descriptor,
+    value: function(this: VuextsMixin<any>, payload: any) //called by user, thinking s/he calls his own method
+       {
+        //console.log('mutation_innerm: this=', this);
+        let vi=this[$vuexts];
+        let result: any=vi.store_.commit(vi.namespace.join("/")+"/"+propertyKey, payload);
+        //result==undefined :-(
+        return result;
+       }};
+ }
+
+//decorate as @mutation
+function mutation(target: any, propertyKey: string, descriptor: PropertyDescriptor)
+ {
+  return mutation_inner(target, propertyKey, descriptor);
+ }
+
+//decorate as @mutation()
+/*function mutation()
+{
+ return mutation_inner;
+}*/
+
+export { mutation };
+
+/*class StoreWrapper
+ {
+  vuex: Vuex.Store<any>;
+  appS: any;
+  constructor()
+   {
+   }
+ }*/
+
+class VuextsInfo<T>
+ {
+  store_: Vuex.Store<any>;
+  module_: T;
+  rawmodule: Vuex.Module<T, any>;
+  namespace: string[];
+  constructor()
+   {
+   }
+ }
+
+type VuextsMixin<X>=
+ {
+  [$vuexts]: VuextsInfo<X>;
+ }
+
+type TCtor<X> =
+ {
+  new (...args: any[]): X;
+ };
+
+//see https://stackoverflow.com/questions/49868048/class-decorator-with-generic-parameter
+function module_inner<T>(ctr: new(...args: any[])=>T, options?: Vuex.Module<T, any>)
+ {
+  // give a name to the extended T we will return
+  /**/
+  type XT = T & VuextsMixin<T>;
+   /*{
+    $vuexts: VuextsInfo<XT>;
+   };*/
+  /*/
+  class XT extends (T as Ctor<any>)
+   {
+    $vuexts: VuextsInfo<XT>;
+   };
+  /**/
+
+  
+  let orioptions: Vuex.Module<T, any>=options || {};
+  let mi=findModuleC(ctr);
+  //console.log('got class, ctr=', ctr, 'si=', si);
+  if (!mi)
+   {
+    console.error("Vuexts: @module should have at least one @action or @mutation or @getter");
+    //return ctr; //should not happen
+   };
+
+  //find getters and add them to si.getters
+  //inspired by vue-class-component/lib/component.js#componentFactory
+  var proto = ctr.prototype;
+  Object.getOwnPropertyNames(proto).forEach(function (key)
+   {
+    if (key === 'constructor') {
+      return;
+     }
+    // known properties
+    if ([""].indexOf(key) > -1) {
+      //si.something = proto[key];
+      return;
+    }
+    var descriptor = Object.getOwnPropertyDescriptor(proto, key);
+    //    if (typeof descriptor.value === 'function') {
+    //        // methods
+    //        (options.methods || (options.methods = {}))[key] = descriptor.value;
+    //    }
+    //else
+    if (mi && descriptor && (descriptor.get || descriptor.set))
+     {
+      let ishidden=mi.hiddens.find(function(hi: HiddenInfo) {return hi.propertyKey==key;});
+      if (!ishidden) //do not convert @hidden getter into Vuex getter
+       {
+        // computed properties
+        let descriptor2=getter_inner(mi.target, key, descriptor);
+        Object.defineProperty(proto, key, descriptor2);
+       };
+     };
+   }); 
+
+
+  //replace constructor to add $vuexts and create module
+  const sub = class VuexTS_Module extends (ctr as TCtor<any>) 
+   {
+    [$vuexts]: VuextsInfo<T>;//<XT>
+    constructor (...args:any[])
+     {
+      super(...args);
+      //disable enumerable to allow deep copy of this (contains cycle)   this.$vuexts=new VuextsInfo<XT>();
+      //replaced with Symbol   Object.defineProperty(this, "$vuexts", {enumerable: false, value: new VuextsInfo<XT>()});
+      this[$vuexts]=new VuextsInfo<T>();
+      // second assertion: this as XT
+      let that=this as any as XT;
+      let adjustedOptions: Vuex.Module<T, any>;//<XT, any>;
+      adjustedOptions=orioptions as Vuex.Module<T, any>;//<XT, any>;
+      if (mi)
+       {
+        adjustedOptions=adjustOptionsModule<T>(that, adjustedOptions, mi);;
+        for (let hid of mi.hiddens)
+         {
+          //already initialized
+          if (hid.descriptor===undefined)
+           {
+            //console.log("Vuexts store: defining property", hid, "value=", this[hid.propertyKey]);
+            Object.defineProperty(this, hid.propertyKey, {enumerable: false, value: this[hid.propertyKey]});
+           }
+          else
+           {
+            //it is, by doing nothing   console.warn("Vuexts: @hidden get/set not implemented");
+           }
+         }
+       };
+      //console.log('ctr store: what\'s diff between ', that, ' and ', T.toString());
+      this[$vuexts].module_=that;
+      this[$vuexts].rawmodule={...adjustedOptions,
+        state: function() {return (that);}
+       };
+     }
+   // final assertion: sub as Ctor<XT>
+   } as TCtor<XT>;
+  return sub;
+ }
+
+/** Only accepts @module or @module(options). Does not accept @module().
+ * 
+ * @param options additional module options e.g. {namespaced?: boolean}
+ */
+function module<T>(options?: Vuex.Module<T, any>): <CtorOfXT extends TCtor<T>>(ctr: CtorOfXT) => CtorOfXT; 
+function module<T>(ctr: TCtor<T>): TCtor<T>;
+function module<T>(options?: Vuex.Module<T, any>|TCtor<T>)
+ {
+  //for @module(), this==undefined
+
+  if (typeof options=="function")
+   {
+    let ctr: (new(...args: any[])=>T)=options;
+    return module_inner<T>(ctr, {});
+   };
+//  throw new Error("failure");
+
+  return function <CtorOfT extends TCtor<T>>(ctr: CtorOfT)//new(...args:any[])=>{})
+   {
+    return module_inner<T>(ctr, options as Vuex.Module<T, any>|undefined);
+   };
+ }
+
+export {module};
+
+function adjustOptionsModule<S>(that: S, opts: Vuex.Module<S, any>, mi: ModuleInfo): Vuex.StoreOptions<S>
+ {
+  let res: Vuex.Module<S, any>={...(opts as Vuex.Module<S, any>)};
+
+  let getters: any={};
+  mi.getters.forEach(function (g: GetterInfo)
+   {
+    getters[g.propertyKey]=function(state: Vuex.Store<S>, getters: any, rootState: Vuex.Store<any>, rootGetters: any)
+       {
+        //console.log('getterm '+g.propertyKey+': that=', that);
+        if (g.descriptor.get)
+          return g.descriptor.get.call(that);
+        else
+          return g.descriptor.value.call(that); //perhaps just g.descriptor.value or test typeof .value==="function"
+       };
+   });
+  res.getters=getters;
+
+  let actions: any={};
+  mi.actions.forEach(function (a: ActionInfo)
+   {
+    actions[a.propertyKey]=function(context: any, payload: any)
+       {
+        //we could bind to 'context' but it has pretty much the same content as 'that'
+        //and 'that' makes way more sense
+        let res=a.descriptor.value.call(that, /*context, */payload);
+        let asPromise=Promise.resolve(res);
+        if (asPromise==res) //was a promise
+          asPromise.catch(function(err)
+           {
+            console.error('Vuexts.action '+a.propertyKey+': exception', err);
+           });
+       };
+   });
+  res.actions=actions;
+
+  let mutations: any={};
+  mi.mutations.forEach(function (m: MutationInfo)
+   {
+    /*
+     SET_STATIONS: function (state, payload)
+         {
+          state.stations=payload;
+         }    */
+    //console.log('gluing mutation, asstring=', m.descriptor.value.toString());
+    mutations[m.propertyKey]=function(state: S, payload: any)
+       {
+        //yep, state==that   console.log('mutation '+m.propertyKey+": that=",that,"state=",state);
+        let result: any=m.descriptor.value.call(that, payload);
+        //console.log("Vuexts: mutation "+m.propertyKey+" returns ", result);
+        return result; //always ===undefined :-(
+       };
+   });
+  res.mutations=mutations;
+
+  return res;
+ }
+
+
+/**
+ * Converts Vuex module to decorated module
+ * @param m e.g. this.$store.state.mymodule
+ */
+export function getModule<T>(m: any): T|undefined
+ {
+  //if (!m.state)
+    //throw Error("Vuexts.getModule called with not a module");
+  let res=m as T&VuextsMixin<T>;
+  if (!res || !res[$vuexts] || (res[$vuexts].module_!=m))
+   {
+    console.error("Vuexts.getModule called with a non-decorated module", m);
+    return;
+   };
+  return res[$vuexts].module_;
+ }
+
+/* * shouldn't be necessary
+ * Convert decorated module S to Vuex.Module<S>
+ * @param module Decorated store instance
+ * /
+export function asVuex<S>(module: S)
+ {
+  console.log('asVuex: AppStore=', AppStore);//, 'centralStore=', centralStore);
+  let vi: VuextsInfo<T>|undefined=(module as any as VuextsMixin<T>)[$vuexts];
+  if (vi.rawModule)
+    return vi.rawModule;
+  console.error('Cannot convert non-decorated module to Vuex module', module);
+  return undefined;
+ } */
+
+import {$vuexts as $vuexts_store} from "./vuex-property-decorator";
+
+export function registerModule<T>(decoratedStore: any, namespace: string[], module: T)
+ {
+  let vuexStore: Vuex.Store<T>;
+  if ((decoratedStore as any)[$vuexts_store])
+    vuexStore=((decoratedStore as any)[$vuexts_store]).store; //well it's VuextsSTOREinfo not MODULEInfo
+  else
+    vuexStore=decoratedStore as Vuex.Store<T>; //assume they already did
+  let vi: VuextsInfo<T>|undefined=(module as any as VuextsMixin<T>)[$vuexts];
+  //console.log("Vuexts registerModule: deco=", decoratedStore, "vuex=", vuexStore, "module=", module, "vi=", vi, "ns", namespace);
+  if (!vi)
+    console.error("Vuexts: cannot register non-decorated module");
+  else
+   {
+    vi.store_=vuexStore;
+    vi.namespace=namespace;
+   }
+  vuexStore.registerModule(namespace, vi.rawmodule);
+ }
+
+export function unregisterModule<T>(decoratedStore: any, namespace: string[])
+ {
+  //TODO: *somebody* should clear the module's reference to the store
+  let vuexStore: Vuex.Store<T>;
+  if ((decoratedStore as any)[$vuexts_store])
+    vuexStore=((decoratedStore as any)[$vuexts_store]).store; //well it's VuextsSTOREinfo not MODULEInfo
+  else
+    vuexStore=decoratedStore as Vuex.Store<T>; //assume they already did
+  /*let vi: null|VuextsInfo<T> =(module as any as VuextsMixin<T>).$vuexts;
+  if (!vi)
+    console.error("Vuexts: cannot register non-decorated module");
+  else
+   {
+    vi.store_=vuexStore;
+    vi.namespace=namespace;
+   }*/
+  vuexStore.unregisterModule(namespace);
+ }
