@@ -125,13 +125,6 @@ import { store, hidden } from "/vuexts/vuex-typescript-decorator";
   @hidden get localStorageDirty() {return this._localStorageDirty;} //not converted to Vuex getter
   set localStorageDirty(lsd: boolean) {this._localStorageDirty=lsd;}
 ```
-All variants are supported on @hidden: (variable, getter+setter) x (@hidden, @hidden())
-```typescript
-  @hidden protected _localStorageDirty: boolean=true;
-  @hidden() protected _localStorageDirty: boolean=true;
-  @hidden get localStorageDirty() {return this._localStorageDirty;}
-  @hidden() get localStorageDirty() {return this._localStorageDirty;}
-```
 ### Modules
 Modules need to be decorated with **@module** instead of **@store**.
 *Modules should always be namespaced, the code is not tested or developed for namespaced: false*.
@@ -144,7 +137,21 @@ export class StationData
   get identifier() {return _identifier;}
 ```
 #### Adding modules to store
-You have to register modules in runtime, using functions registerModule and unregisterModule.
+If you're adding the module at 2nd or lower level, you need to create the path in the store. I also recommend making a placeholder for the module(s).
+```typescript
+@store({
+  modules: { //create path of modules where we will be adding at runtime
+    stations: {namespaced: true}
+  }
+})
+class TAppStore {
+  //create placeholder so we can access the added modules from store,
+  //rather than keeping the list of modules somewhere else
+  //This is just a Typescript placeholder. The object will be managed by Vuex.
+  stations: { [module_name: string]: StationData };
+```
+
+You have to register modules at runtime, using functions **registerModule** and **unregisterModule**.
 ```typescript
 import {registerModule as registerVuexModule,
         unregisterModule as unregisterVuexModule} from "/vuexts/vuex-typescript-decorator";
@@ -168,4 +175,11 @@ import { getModule } from "/vuexts/vuex-typescript-decorator";
       res=getModule<StationData>(module);
     return res;
    }
+```
+### Decorator syntax
+Both expression and function variants are supported on decorators.
+No options are defined for decorators other than @store and @module.
+```typescript
+  @action async setCounter(payload: {value?: number}): Promise<void>
+  @action() async setCounter(payload: {value?: number}): Promise<void>
 ```

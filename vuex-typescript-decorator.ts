@@ -196,7 +196,6 @@ function hidden_inner(target: any, propertyKey: string, descriptor?: PropertyDes
 
 function hidden(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor; //@hidden get/set
 function hidden(target: any, propertyKey: string): void; //@hidden x: number
-//function hidden(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor;
 function hidden(options?: {hi: string}): (target: any, propertyKey: string, descriptor?: PropertyDescriptor)=>any;//PropertyDescriptor;
 function hidden(options?: {hi: string}): (target: any, propertyKey: string)=>void;
 function hidden(target?: any, propertyKey?: string, descriptor?: PropertyDescriptor)
@@ -335,7 +334,7 @@ function store_inner<T>(ctr: new(...args: any[])=>T, options?: Vuex.StoreOptions
           if (hid.descriptor===undefined)
            {
             //console.log("Vuexts store: defining property", hid, "value=", this[hid.propertyKey]);
-            Object.defineProperty(this, hid.propertyKey, {enumerable: false, value: this[hid.propertyKey]});
+            Object.defineProperty(this, hid.propertyKey, {enumerable: false, value: this[hid.propertyKey], writable: true});
            }
           else
            {
