@@ -63,7 +63,7 @@ function findStoModC(ctr: Function): StoModInfo|undefined
   return centralStore.find(function(smi: StoModInfo) {return smi.target.constructor==ctr;});
  }
 
-function getter_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+function getter_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor, options?: {hello: string}): PropertyDescriptor
  {
   if (!descriptor)
     throw Error("The Property Descriptor will be undefined if your script target is less than ES5");;
@@ -71,7 +71,7 @@ function getter_inner(target: any, propertyKey: string, descriptor: PropertyDesc
   let smi=findStoMod(target);
   //if you use both @getter and get then we're called twice
   if (!smi.getters.find(function(gi) {return gi.propertyKey==propertyKey;}))
-  smi.getters.push(new GetterInfo(propertyKey, descriptor));
+    smi.getters.push(new GetterInfo(propertyKey, descriptor));
   if (descriptor.get || descriptor.set) //for get property()...
     return {...descriptor,
       get: function(this: VuextsMixin<any>) //called by user, thinking s/he calls his own method
@@ -96,25 +96,28 @@ function getter_inner(target: any, propertyKey: string, descriptor: PropertyDesc
          }}
  }
 
-//decorate as @getter
-function getter(target: any, propertyKey: string, descriptor: PropertyDescriptor)
+//decorate as @getter or @getter() or @getter({hello: "world"})
+function getter(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor;
+function getter(options?: {hello: string}): (target: any, propertyKey: string, descriptor: PropertyDescriptor)=>PropertyDescriptor;
+function getter(target: any, propertyKey?: string, descriptor?: PropertyDescriptor)
  {
-  return getter_inner(target, propertyKey, descriptor);
+  if (target && propertyKey && descriptor)
+   {
+    return getter_inner(target, propertyKey, descriptor, undefined);
+   };
+  return function(target2: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+   {
+    return getter_inner(target2, propertyKey, descriptor, target);
+   };
  }
 
-//decorate as @getter()
-/*function getter()
- {
-  return getter_inner;
- }*/
+export { getter };
 
-export { getter }; //cannot have both @getter and @getter() under same name... probably
-
-function action_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+function action_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor, options?: {hello: string}): PropertyDescriptor
  {
   if (!descriptor)
     throw Error("The Property Descriptor will be undefined if your script target is less than ES5");;
-  //console.log('got action, target=', target, 'prop=', propertyKey);
+  //console.log('got action, target=', target, 'prop=', propertyKey, "options=", options);
   let smi=findStoMod(target);
   smi.actions.push(new ActionInfo(propertyKey, descriptor));
   return {...descriptor,
@@ -122,25 +125,29 @@ function action_inner(target: any, propertyKey: string, descriptor: PropertyDesc
        {
         //console.log('action_inner: this=', this);
         let vi=this[$vuexts];
-        vi.store.dispatch(vi.namespacedKey(propertyKey), payload);
+        let result: any=vi.store.dispatch(vi.namespacedKey(propertyKey), payload);
+        return result;
        }}
  }
 
-//decorate as @action
-function action(target: any, propertyKey: string, descriptor: PropertyDescriptor)
+//decorate as @action or @action() or @action({hello: "there"})
+function action(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor;
+function action(options?: {hello: string}): (target: any, propertyKey: string, descriptor: PropertyDescriptor)=>PropertyDescriptor;
+function action(target: any, propertyKey?: string, descriptor?: PropertyDescriptor)
  {
-  return action_inner(target, propertyKey, descriptor);
+  if (target && propertyKey && descriptor)
+   {
+    return action_inner(target, propertyKey, descriptor, undefined);
+   };
+  return function(target2: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+   {
+    return action_inner(target2, propertyKey, descriptor, target);
+   };
  }
 
-//decorate as @action()
-/*function action()
- {
-  return action_inner;
- }*/
+export { action };
 
-export { action }; //cannot have both @action and @action() under same name... probably
-
-function mutation_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+function mutation_inner(target: any, propertyKey: string, descriptor: PropertyDescriptor, options?: {hola: string}): PropertyDescriptor
  {
   if (!descriptor)
     throw Error("The Property Descriptor will be undefined if your script target is less than ES5");;
@@ -152,23 +159,26 @@ function mutation_inner(target: any, propertyKey: string, descriptor: PropertyDe
        {
         //console.log('mutation_inner: this=', this);
         let vi=this[$vuexts];
-        let result: any=vi.store.commit(vi.namespacedKey(propertyKey), payload); //undefined
+        let result: any=vi.store.commit(vi.namespacedKey(propertyKey), payload);
         //result==undefined :-(
         return result;
        }};
  }
 
-//decorate as @mutation
-function mutation(target: any, propertyKey: string, descriptor: PropertyDescriptor)
+//decorate as @mutation or @mutation() or @mutation({hola: "ahi"})
+function mutation(target: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor;
+function mutation(options?: {hola: string}): (target: any, propertyKey: string, descriptor: PropertyDescriptor)=>PropertyDescriptor;
+function mutation(target: any, propertyKey?: string, descriptor?: PropertyDescriptor)
  {
-  return mutation_inner(target, propertyKey, descriptor);
+  if (target && propertyKey && descriptor)
+   {
+    return mutation_inner(target, propertyKey, descriptor, undefined);
+   };
+  return function(target2: any, propertyKey: string, descriptor: PropertyDescriptor): PropertyDescriptor
+   {
+    return mutation_inner(target2, propertyKey, descriptor, target);
+   };
  }
-
-//decorate as @mutation()
-/*function mutation()
-{
- return mutation_inner;
-}*/
 
 export { mutation };
 
