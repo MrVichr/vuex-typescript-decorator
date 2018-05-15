@@ -178,7 +178,7 @@ import { getModule } from "/vuexts/vuex-typescript-decorator";
 ```
 ### Decorator syntax
 Both expression and function variants are supported on decorators.
-No options are defined for decorators other than @store and @module.
+No options are defined for decorators other than **@store** and **@module**.
 ```typescript
   @action async setCounter(payload: {value?: number}): Promise<void>
   @action() async setCounter(payload: {value?: number}): Promise<void>

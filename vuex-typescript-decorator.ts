@@ -460,7 +460,7 @@ function module_inner<T>(ctr: new(...args: any[])=>T, options?: Vuex.Module<T, a
           if (hid.descriptor===undefined)
            {
             //console.log("Vuexts store: defining property", hid, "value=", this[hid.propertyKey]);
-            Object.defineProperty(this, hid.propertyKey, {enumerable: false, value: this[hid.propertyKey]});
+            Object.defineProperty(this, hid.propertyKey, {enumerable: false, value: this[hid.propertyKey], writable: true});
            }
           else
            {
